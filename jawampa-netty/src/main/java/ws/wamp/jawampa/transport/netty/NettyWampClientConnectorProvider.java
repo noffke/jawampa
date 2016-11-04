@@ -136,10 +136,14 @@ public class NettyWampClientConnectorProvider implements IWampConnectorProvider 
                         if (needSsl) port = 443;
                         else port = 80;
                     } else port = uri.getPort();
-                    
+
+                    final DefaultHttpHeaders customHeaders = new DefaultHttpHeaders();
+                    if (nettyConfig != null) {
+                        customHeaders.add(nettyConfig.getAdditionalHeaders());
+                    }
                     final WebSocketClientHandshaker handshaker = WebSocketClientHandshakerFactory.newHandshaker(
                         uri, WebSocketVersion.V13, subProtocols,
-                        false, new DefaultHttpHeaders(), maxFramePayloadLength);
+                        false, customHeaders, maxFramePayloadLength);
                     
                     /**
                      * Netty handler for that receives and processes WampMessages and state
