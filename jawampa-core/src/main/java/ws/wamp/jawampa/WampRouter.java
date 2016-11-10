@@ -573,10 +573,11 @@ public class WampRouter {
                 err = ApplicationError.INVALID_ARGUMENT;
             }
             
-            Procedure proc = null;
             if (err == null) {
-                proc = handler.realm.procedures.get(reg.procedure);
-                if (proc != null) err = ApplicationError.PROCEDURE_ALREADY_EXISTS;
+                Procedure proc = handler.realm.procedures.get(reg.procedure);
+                if (proc != null) {
+                    unregister(handler, proc);
+                }
             }
             
             if (err != null) { // If we have an error send that to the client
@@ -631,27 +632,8 @@ public class WampRouter {
                 handler.controller.sendMessage(errMsg, IWampConnectionPromise.Empty);
                 return;
             }
-            
-            // Mark pending calls to this procedure as failed
-            for (Invocation invoc : proc.pendingCalls) {
-                handler.pendingInvocations.remove(invoc.invocationRequestId);
-                if (invoc.caller.state == RouterHandlerState.Open) {
-                    ErrorMessage errMsg = new ErrorMessage(CallMessage.ID, invoc.callRequestId, 
-                        null, ApplicationError.NO_SUCH_PROCEDURE, null, null);
-                    invoc.caller.controller.sendMessage(errMsg, IWampConnectionPromise.Empty);
-                }
-            }
-            proc.pendingCalls.clear();
+            unregister(handler, proc);
 
-            // Remove the procedure from the realm and the handler
-            handler.realm.procedures.remove(proc.procName);
-            handler.providedProcedures.remove(proc.registrationId);
-            
-            if (handler.providedProcedures.size() == 0) {
-                handler.providedProcedures = null;
-                handler.pendingInvocations = null;
-            }
-            
             // Send the acknowledge
             UnregisteredMessage response = new UnregisteredMessage(unreg.requestId);
             handler.controller.sendMessage(response, IWampConnectionPromise.Empty);
@@ -854,6 +836,28 @@ public class WampRouter {
                 PublishedMessage response = new PublishedMessage(pub.requestId, publicationId);
                 handler.controller.sendMessage(response, IWampConnectionPromise.Empty);
             }
+        }
+    }
+
+    private void unregister(ClientHandler handler, Procedure proc) {
+        // Mark pending calls to this procedure as failed
+        for (Invocation invoc : proc.pendingCalls) {
+            handler.pendingInvocations.remove(invoc.invocationRequestId);
+            if (invoc.caller.state == RouterHandlerState.Open) {
+                ErrorMessage errMsg = new ErrorMessage(CallMessage.ID, invoc.callRequestId,
+                    null, ApplicationError.NO_SUCH_PROCEDURE, null, null);
+                invoc.caller.controller.sendMessage(errMsg, IWampConnectionPromise.Empty);
+            }
+        }
+        proc.pendingCalls.clear();
+
+        // Remove the procedure from the realm and the handler
+        handler.realm.procedures.remove(proc.procName);
+        handler.providedProcedures.remove(proc.registrationId);
+
+        if (handler.providedProcedures.size() == 0) {
+            handler.providedProcedures = null;
+            handler.pendingInvocations = null;
         }
     }
 
